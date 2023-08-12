@@ -1,0 +1,10 @@
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataFramesMeta = "1313f7d8-7da2-5740-9ea0-a2ca25f37964"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+PlotUtils = "995b91a9-d308-5afd-9ec6-746e21dbc043"
+TimeseriesTools = "380cddd1-6ef2-46ca-b087-e7151fb095ff"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
