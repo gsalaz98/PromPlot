@@ -11,25 +11,79 @@ import UnicodePlots
 
 
 Base.@kwdef struct PrometheusQueryClient
-    scheme::String = "https"
-    host::String = "localhost"
-    port::Integer = 443
+    url::String = "http://localhost:9090"
     api::String = "/api/v1/"
-    url::String = scheme * "://" * host * ":" * string(port) * api
 end
 
-function promql(client::PrometheusQueryClient, query::String)::Union{Nothing, DataFrame}
-    url = client.url * "query"
+const RFC3339_FORMAT = Dates.dateformat"yyyy-mm-ddTHH:MM:SS.sZ"
+
+function promql(
+    client::PrometheusQueryClient, 
+    query::String; 
+    startdate::Union{Nothing, Union{String, DateTime}}=nothing,
+    enddate::Union{Nothing, Union{String, DateTime}}=nothing,
+    step::Union{Nothing, String}=nothing,
+    timeout::Union{Nothing, String}=nothing)::Union{Nothing, DataFrame}
+
+    # Remove potential whitespace and append a trailing slash
+    url = rstrip(rstrip(client.url), '/') * client.api * "query_range"
+    fallback_query_url = rstrip(rstrip(client.url), '/') * client.api * "query"
+
+    if isnothing(startdate)
+        startdate = Dates.format(now(UTC) - Dates.Hour(2), RFC3339_FORMAT)
+    elseif isa(startdate, DateTime)
+        startdate = Dates.format(startdate, RFC3339_FORMAT)
+    end
+    if isnothing(enddate)
+        enddate = Dates.format(now(UTC), RFC3339_FORMAT)
+    elseif isa(enddate, DateTime)
+        enddate = Dates.format(enddate, RFC3339_FORMAT)
+    end
+    if isnothing(step)
+        step = "1m"
+    end
+    if isnothing(timeout)
+        timeout = "30s"
+    end
+
     params = Dict(
         "query" => query,
-        #"time" => rfc3339time,
-        #"timeout" => ""
+        "start" => startdate,
+        "end" => enddate,
     )
-    response = HTTP.post(url; body=params)
-    r_json = JSON.parse(String(response.body))
+
+    if !isnothing(step)
+        params["step"] = step
+    end
+    if !isnothing(timeout)
+        params["timeout"] = timeout
+    end
+
+    attempt_fallback = false
+    repsonse = try response = HTTP.post(url; body=params);
+    catch e
+        println("Prometheus query_range request failed: $e, attempting fallback query"); 
+        attempt_fallback = true
+    end
+
+    if attempt_fallback
+        response = try HTTP.post(fallback_query_url; body=Dict(
+            "query" => query,
+            "timeout" => timeout
+        ));
+        catch e
+            error("Prometheus query request failed: $e")
+        end
+    end
+
+    r_json = try JSON.parse(String(response.body));
+    catch e
+        println(response.body)
+        error("Prometheus query results JSON parsing failed: $e")
+    end;
 
     if r_json["status"] != "success"
-        error("Prometheus query failed: $(r_json.error)")
+        error("Prometheus query error: $(r_json.error)")
     end
 
     data = r_json["data"]["result"]
@@ -43,7 +97,7 @@ function promql(client::PrometheusQueryClient, query::String)::Union{Nothing, Da
     # Todo: expand functionality to allow omitting labels from results
     exclude_labels = Dict("__name__" => true)
     labels = Dict{String, Vector{Union{String, Nothing}}}()
-    vals = (ts=Int64[], value=Float64[])
+    vals = (ts=Float64[], value=Float64[])
 
     if isempty(data)
         return nothing
@@ -125,7 +179,6 @@ function prom_labels(client::PrometheusQueryClient)::Vector{String}
         error("Prometheus query failed: $(r_json.error)")
     end
 
-    println(r_json)
     return r_json["data"]
 end
 
@@ -138,7 +191,7 @@ Base.@kwdef struct PrometheusMetric
 end
 
 function prom_metrics(client::PrometheusQueryClient)::Vector{PrometheusMetric}
-    url = client.url * "targets/metadata"
+    url = rstrip(rstrip(client.url), '/') * '/' * client.api * "targets/metadata"
     response = HTTP.get(url)
     r_json = JSON.parse(String(response.body))
 
