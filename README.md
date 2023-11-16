@@ -1,7 +1,8 @@
 # Promplot
 Plot Prometheus graphs in the command line or in a GUI with [`Makie.jl`](https://github.com/MakieOrg/Makie.jl)
 
-![Example PromPlot 3D Graphing Display](./docs/promplot_example.png)
+![Example PromPlot 2D Graphing Display](./docs/promplot_example_2d.png)
+![Example PromPlot 3D Graphing Display](./docs/promplot_example_3d.png)
 
 # Getting started
 TODO, but some instructions on getting a local dev environment setup are as follows:
