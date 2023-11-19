@@ -16,11 +16,13 @@ add_arg_table(s,
     "--gui",
     Dict(
         :help => "Plot in GUI - Required for 3D Mode",
+        :arg_type => Bool,
         :default => true
     ),
     "--tui",
     Dict(
         :help => "Plot in CLI/TUI",
+        :arg_type => Bool,
         :default => false
     ),
     "--limit",
@@ -51,7 +53,13 @@ add_arg_table(s,
         :help => "Query End Date (default = now(UTC))",
         :arg_type => String,
         :default => nothing
-    )
+    ),
+    "--step",
+    Dict(
+        :help => "Query Resolution (default = 1m)",
+        :arg_type => String,
+        :default => "1m"
+    ),
 )
 
 
@@ -72,12 +80,28 @@ if !test_prometheus_connection(p)
 end
 
 is_gui_plot = args[:gui]
+is_tui_plot = args[:tui]
+
+if is_tui_plot
+    include("plot_tui.jl")
+    init_terminal(
+        p; 
+        query=args[:promql],
+        startdate=args[:start],
+        enddate=args[:end],
+        update_resolution=args[:step],
+        series_limit=args[:limit]
+    )
+
+    exit()
+end
+
 if is_gui_plot
     include("plot_gui.jl")
     fig = init_window(
         p; 
         query=args[:promql],
-        series_limit=args[:series_limit],
+        series_limit=args[:limit],
         is3d=args[:is3d],
         startdate=args[:start],
         enddate=args[:end]
@@ -94,6 +118,6 @@ if is_gui_plot
     end
 
     if take!(close_window)
-        return
+        exit()
     end
 end
