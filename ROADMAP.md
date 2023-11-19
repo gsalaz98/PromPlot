@@ -9,3 +9,4 @@
 [ ] Multiple PrometheusQueryClients to query multiple servers at the same time and label the time series respectively
 
 # Wanted features
+[ ] Integration w/ different metrics operators such as `node-exporter`, `kube-state-metrics`, `vpa`, `hpa`, etc.

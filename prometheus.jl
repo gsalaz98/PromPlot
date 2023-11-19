@@ -208,3 +208,12 @@ function prom_metrics(client::PrometheusQueryClient)::Vector{PrometheusMetric}
         type=get(i, "type", nothing)
     ) for i in data]
 end
+
+function test_prometheus_connection(p::PrometheusQueryClient)
+    try
+        response = HTTP.get(p.url; connect_timeout=2, readtimeout=2, retry=false)
+        return response.status in (200, 302)
+    catch e
+        return false
+    end
+end

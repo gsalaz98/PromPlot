@@ -171,7 +171,6 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
     end
 
     layout[1, 2] = grid!(hcat(toggles, formatted_labels))
-    colsize!(layout, 1, Aspect(1, 1))
 
     glscreen = display(fig).glscreen
 
@@ -315,7 +314,7 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
 
     return vcat(
         toggles, 
-        formatted_labels, 
+        formatted_labels,
         inspector
     )
 end
@@ -359,10 +358,12 @@ function init_window(
     fig[2, 1] = user_layout
 
     ax::Union{Axis, Axis3} = is3d ? 
-        Axis3(plot_layout[1, 1]; aspect=1) :
-        Axis(plot_layout[1, 1]; aspect=1)
+        Axis3(plot_layout[1, 1]) :
+        Axis(plot_layout[1, 1])
 
-    colsize!(plot_layout, 1, Aspect(1, 1))
+    colsize!(plot_layout, 1, initial_resolution[1] / 3.25)
+    colsize!(plot_layout, 2, Auto(true, 1))
+    rowsize!(plot_layout, 1, initial_resolution[2] / 2)
 
     is3d_button = Button(
         fig;
@@ -468,9 +469,6 @@ function init_window(
     is3d = false
 
     on(is3d_button.clicks) do clicks
-        # Sleep to allow the button to revert back to its original appearance
-        sleep(0.1)
-
         # Wipe out the previous Axis(3)
         delete!(ax)
 
