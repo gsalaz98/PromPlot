@@ -1,7 +1,7 @@
 # PromPlot
 Plot Prometheus graphs in the command line or in a GUI with [`Makie.jl`](https://github.com/MakieOrg/Makie.jl)
 
-![Example PromPlot 2D CLI Plot](./docs/promplot_example_cli_plot.png)
+![Example PromPlot 2D CLI Plot Realtime](./docs/promplot_example_cli.gif)
 ![Example PromPlot 2D Graphing Display](./docs/promplot_example_2d.png)
 ![Example PromPlot 3D Graphing Display](./docs/promplot_example_3d.png)
 
