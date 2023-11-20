@@ -6,7 +6,7 @@ if abspath(PROGRAM_FILE) != @__FILE__
     return
 end
 
-s = ArgParseSettings(exit_after_help=true)
+s = ArgParseSettings(exit_after_help=true, autofix_names=true)
 add_arg_table(s,
     "--promql",
     Dict(
@@ -17,13 +17,13 @@ add_arg_table(s,
     Dict(
         :help => "Plot in GUI - Required for 3D Mode",
         :arg_type => Bool,
-        :default => true
+        :default => false
     ),
     "--tui",
     Dict(
         :help => "Plot in CLI/TUI",
         :arg_type => Bool,
-        :default => false
+        :default => true
     ),
     "--limit",
     Dict(
@@ -60,6 +60,24 @@ add_arg_table(s,
         :arg_type => String,
         :default => "1m"
     ),
+    "--realtime",
+    Dict(
+        :help => "Enable realtime updates (default = false)",
+        :arg_type => Bool,
+        :default => true
+    ),
+    "--realtime-update-seconds",
+    Dict(
+        :help => "Realtime update interval (default = 5s)",
+        :arg_type => Int,
+        :default => 5
+    ),
+    "--realtime-range",
+    Dict(
+        :help => "Realtime update range (default = 1h)",
+        :arg_type => String,
+        :default => "1h"
+    ),
 )
 
 
@@ -82,7 +100,7 @@ end
 is_gui_plot = args[:gui]
 is_tui_plot = args[:tui]
 
-if is_tui_plot
+if is_tui_plot && !is_gui_plot
     include("plot_tui.jl")
     init_terminal(
         p; 
@@ -90,6 +108,9 @@ if is_tui_plot
         startdate=args[:start],
         enddate=args[:end],
         update_resolution=args[:step],
+        realtime=args[:realtime],
+        realtime_update_seconds=args[:realtime_update_seconds],
+        realtime_range=args[:realtime_range],
         series_limit=args[:limit]
     )
 
