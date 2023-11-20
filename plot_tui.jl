@@ -21,7 +21,7 @@ end
     series_limit::Int = 25
     realtime::Bool = true
     realtime_range::Period = Dates.Hour(1)
-    realtime_update_seconds::Int = 5
+    realtime_update_period::Period = Dates.Second(5)
 
     df::Union{Nothing, DataFrame} = nothing
     plotindex::Int = 0
@@ -30,8 +30,25 @@ end
     plotlabels::Vector{Dict{String, String}} = []
     plotindexesbylabel::Dict{String, Int} = Dict()
 
-    update_loop::Bool = false
     quit::Bool = false
+end
+
+function TUI.init!(m::Model, t::TUI.TerminalBackend)
+    if !m.realtime
+        return
+    end
+
+    # Recreation of the event loop of the TUI library
+    # so that we can update the model in realtime
+    while !m.quit
+        evt = TUI.try_get_event(t)#, wait=m.realtime_update_period)
+        isnothing(evt) ?
+            update!(m) :
+            TUI.update!(m, evt)
+
+        TUI.render(t, m)
+        TUI.draw(t)
+    end
 end
 
 function get_title_padding(fig)
@@ -88,17 +105,6 @@ function TUI.view(m::Model)
         return
     end
 
-    # FIXME: this isn't working, but the idea is right
-    if !m.update_loop
-        m.update_loop = true
-        Threads.@spawn begin
-            while !m.quit
-                sleep(m.realtime_update_seconds)
-                TUI.update!(m, nothing)
-            end
-        end
-    end
-
     empty!(m.plots)
     dfgroup = groupby(m.df, allbut(m.df, [:ts, :value]))
 
@@ -145,16 +151,8 @@ function TUI.view(m::Model)
     m.plots[m.plotindex]
 end
 
-function TUI.update!(m::Model, event::TUI.KeyEvent)
-    if TUI.keycode(event) == "q" && event.data.kind == "Press"
-        m.quit = true
-        return
-    end
 
-    if !m.realtime
-        return
-    end
-
+function update!(m::Model)
     nowutc = now(UTC)
     m.enddate = Dates.format(nowutc, RFC3339_FORMAT)
     m.startdate = Dates.format(nowutc - m.realtime_range, RFC3339_FORMAT)
@@ -170,6 +168,19 @@ function TUI.update!(m::Model, event::TUI.KeyEvent)
     if isnothing(m.df)
         return
     end
+end
+
+function TUI.update!(m::Model, event::TUI.KeyEvent)
+    if TUI.keycode(event) == "q" && event.data.kind == "Press"
+        m.quit = true
+        return
+    end
+
+    if !m.realtime
+        return
+    end
+
+    update!(m)
 end
 
 function parse_period(period::String)
@@ -199,7 +210,7 @@ function init_terminal(
     enddate::Union{Nothing, Union{DateTime, String}}=nothing,
     update_resolution::Union{Nothing, String}=nothing,
     realtime::Bool=true,
-    realtime_update_seconds=5,
+    realtime_update::String="5s",
     realtime_range::String="1h",
     series_limit::Int=25,
 )
@@ -209,6 +220,7 @@ function init_terminal(
     end
     
     realtime_range_period = parse_period(realtime_range)
+    realtime_update_period = parse_period(realtime_update)
 
     if isnothing(startdate)
         startdate = Dates.format(now(UTC) - realtime_range_period, RFC3339_FORMAT)
@@ -239,7 +251,7 @@ function init_terminal(
         return
     end
 
-    TUI.app(Model(
+    m = Model(
         p,
         query,
         startdate,
@@ -248,7 +260,7 @@ function init_terminal(
         series_limit,
         realtime,
         realtime_range_period,
-        realtime_update_seconds,
+        realtime_update_period,
         
         df,
         0,
@@ -257,7 +269,8 @@ function init_terminal(
         [],
         Dict(),
 
-        false,
         false
-    ))
+    )
+
+    TUI.app(m)
 end

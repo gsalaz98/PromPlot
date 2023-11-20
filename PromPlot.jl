@@ -66,11 +66,11 @@ add_arg_table(s,
         :arg_type => Bool,
         :default => true
     ),
-    "--realtime-update-seconds",
+    "--realtime-update",
     Dict(
         :help => "Realtime update interval (default = 5s)",
-        :arg_type => Int,
-        :default => 5
+        :arg_type => String,
+        :default => "5s"
     ),
     "--realtime-range",
     Dict(
@@ -109,7 +109,7 @@ if is_tui_plot && !is_gui_plot
         enddate=args[:end],
         update_resolution=args[:step],
         realtime=args[:realtime],
-        realtime_update_seconds=args[:realtime_update_seconds],
+        realtime_update=args[:realtime_update],
         realtime_range=args[:realtime_range],
         series_limit=args[:limit]
     )
@@ -125,7 +125,8 @@ if is_gui_plot
         series_limit=args[:limit],
         is3d=args[:is3d],
         startdate=args[:start],
-        enddate=args[:end]
+        enddate=args[:end], 
+        update_resolution=args[:step],
     )
 
     display(fig)
