@@ -18,7 +18,7 @@ preferred method of installation in the future.
 2. `] activate .`
 3. `] instantiate`
 4. `exit()`
-5. `julia --project=. PromPlot.jl --promql "idelta((sum by (method, path) (kubelet_http_requests_duration_seconds_sum))[24h:])" --url "http://prometheus.my-cluster.k8s.internal:9090`
+5. `julia --project=. PromPlot.jl --promql "idelta((sum by (method, path) (kubelet_http_requests_duration_seconds_sum))[24h:])" --url "http://prometheus.my-cluster.k8s.internal:9090"`
 6. Replace the `--url` argument with your Prometheus server
 
 ### Available options:
@@ -35,8 +35,7 @@ optional arguments:
   --gui GUI             Plot in GUI - Required for 3D Mode (type: Bool, default: false)
   --tui TUI             Plot in CLI/TUI (type: Bool, default: true)
   --limit LIMIT         Maximum number of series to plot (type: Int64, default: 25)
-  --url URL             Prometheus URL (default:
-                        "http://localhost:9090")
+  --url URL             Prometheus URL (default: "http://localhost:9090")
   --is3d IS3D           Start in 3D Plotting Mode (default: false)
   --start START         Query Start Date (default = now(UTC) - 2h)
   --end END             Query End Date (default = now(UTC))

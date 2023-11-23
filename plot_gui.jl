@@ -29,6 +29,7 @@ const UPDATE_RESOLUTION_OPTIONS = [
 const RED::RGBAf = RGBAf(1.0, 0.0, 0.0, 1.0)
 const WHITE::RGBAf = RGBAf(1.0, 1.0, 1.0, 1.0)
 const BLUE::RGBAf = RGBAf(0.0, 0.0, 1.0, 1.0)
+const DARK_BLUE::RGBAf = RGBAf(25/255, 25/255, 112/255, 1.0)
 const VERY_DARK::RGBAf = RGBAf(0.1, 0.1, 0.1, 1.0)
 const BLACK::RGBAf = RGBAf(0.0, 0.0, 0.0, 1.0)
 
@@ -75,13 +76,15 @@ function format_label_table(labels::Vector{String})::Vector{String}
                 final_label *= "..."
             end
         end
-        push!(formatted_labels, final_label)
+        # Right pad to have consistent formatting with labels and have consistent
+        # placement of the plot and legend labels; aligns centered text properly.
+        push!(formatted_labels, rpad(final_label, MAX_LEGEND_CHAR_LIMIT))
     end
 
     return formatted_labels
 end
 
-function render_data(fig, layout, ax, df, status_label; query=nothing, startdate=nothing, enddate=nothing, page=1, is3d=false, series_limit=100)
+function render_data(fig, layout, ax, df, status_label; query=nothing, startdate=nothing, enddate=nothing, orientation=:col, is3d=false, series_limit=100)
     try 
         # 3D plots don't have an empty! method defined, so let's clear the 
         # whole axis and start anew
@@ -101,15 +104,19 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
     series_visible = Observable{Bool}[]
     labels = String[]
 
-    for (idx, dfg) in dfgroups |> enumerate
-        visible = Observable{Bool}(true)
+    df_start = minimum(df[:, :ts])
 
-        push!(labels, join(dfg[begin, allbut(dfg, [:ts, :value])], ","))
+    for (idx, dfg) in dfgroups |> enumerate
+        colnames = allbut(dfg, [:ts, :value])
+        colvalues = values(dfg[1, allbut(dfg, [:ts, :value])])
+        push!(labels, join(["$i=$j" for (i, j) in zip(colnames, colvalues)], ","))
+        
+        visible = Observable{Bool}(true)
         push!(series_visible, visible)
 
         if is3d
             push!(series, lines!(
-                ax, dfg[:, :ts] .- dfg[begin, :ts],
+                ax, dfg[:, :ts] .- df_start,
                 fill(idx, size(dfg)[1]),
                 dfg[:, :value];
                 visible=visible
@@ -117,205 +124,287 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
         else
             push!(series, lines!(
                 ax,
-                dfg[:, :ts] .- dfg[begin, :ts],
+                dfg[:, :ts] .- df_start,
                 dfg[:, :value];
                 visible=visible
             ))
         end
-
-        if idx >= series_limit
-            status_label.text[] = "Total series count exceeded $series_limit, truncating series (total: $(length(dfgroups)))"
-            break
-        end
     end
-
-    inspector = DataInspector(fig; range=0, enabled=false)
 
     ax.title[] = join(("Query: " * query, "Start: " * startdate * ", End: " * enddate), "\n")
     ax.titlesize[] = 24
     ax.titlefont[] = FONT_COURIER
 
-    ax.xlabel[] = "Time (s)"
+    dateformat = "u dd HH:MM:SS"
+    if unix2datetime(maximum(df[:, :ts])) - unix2datetime(df_start) < Dates.Day(1)
+        dateformat = "HH:MM:SS"
+    end
+
+    ax.xtickformat = x -> Dates.format.(unix2datetime.(x .+ df_start), dateformat)
+
     if is3d
         ax.ylabel[] = "Series Index"
         ax.zlabel[] = "Value"
-    else
-        ax.ylabel[] = "Value"
     end
 
-    toggles = [
-        Button(
-            layout[1, 2];
-            label="",
-            buttoncolor=series[idx].color
-        ) for idx in labels |> eachindex
-    ]
+    lrow = orientation == :col ? 1 : 2
+    lcol = orientation == :col ? 2 : 1
+
+    page = Observable{Int}(1)
+    results_per_page = orientation == :col ? 20 : 5
+
+    start_idx = @lift(($page - 1) * results_per_page + 1)
+    end_idx = @lift(min($start_idx + results_per_page - 1, length(labels)))
+
+    button_clicked = [Observable{Bool}(false) for _ in eachindex(series)]
+
+    prev_button = Button(
+        layout[lrow, lcol];
+        label="Prev",
+        buttoncolor=@lift($page == 1 ? DARK_BLUE : BLUE),
+        labelcolor=:white,
+        width=70,
+        halign=:left
+    )
+
+    next_button = Button(
+        layout[lrow, lcol];
+        label="Next",
+        buttoncolor=@lift($page == ceil(length(labels) / results_per_page) ? DARK_BLUE : BLUE),
+        labelcolor=:white,
+        width=70,
+        halign=:left
+    )
+
+    glscreen = nothing
+
+    on(next_button.clicks) do next_click
+        page[] = min(page.val + 1, convert(Int, ceil(length(labels) / results_per_page)))
+        return Consume(true)
+    end
+
+    on(prev_button.clicks) do prev_click
+        page[] = max(page.val - 1, 1)
+        return Consume(true)
+    end
+
+    toggles_gc = nothing
+    formatted_labels_gc = nothing
+
+    on(page; update=true) do p
+        if !isnothing(toggles_gc)
+            for t in toggles_gc
+                delete!(t)
+            end
+        end
+        if !isnothing(formatted_labels_gc)
+            for l in formatted_labels_gc
+                delete!(l)
+            end
+        end
+
+        toggles_gc = toggles = [
+            Button(
+                layout[lrow, lcol];
+                label="",
+                buttoncolor=series[idx].color
+            ) for idx in start_idx.val:end_idx.val
+        ]
     
-    formatted_labels = [
-        Label(
-            layout[1, 2];
-            text=i,
-            font=FONT_COURIER,
-            fontsize=14
-        ) for i in format_label_table(labels)
-    ]
+        formatted_labels_gc = formatted_labels = [
+            Label(
+                layout[lrow, lcol];
+                text=i,
+                font=FONT_COURIER,
+                fontsize=14,
+                halign=:left
+            ) for i in format_label_table(labels[start_idx.val:end_idx.val])
+        ]
 
-    series_indexes = Dict()
-    for (idx, s) in enumerate(series)
-        series_indexes[s] = idx
-    end
+        series_indexes = Dict()
+        for (idx, s) in enumerate(series)
+            series_indexes[s] = idx
+        end
 
-    block_series = Dict()
-    for (b, s) in zip(toggles, series)
-        block_series[b] = s
-    end
+        block_series = Dict()
+        for (b, s) in zip(toggles, series[start_idx.val:end_idx.val])
+            block_series[b] = s
+        end
 
-    layout[1, 2] = grid!(hcat(toggles, formatted_labels))
+        layout[lrow, lcol] = grid!(
+            vcat(
+                hcat(toggles, formatted_labels),
+                hcat(prev_button, next_button)
+            )
+        )
 
-    glscreen = display(fig).glscreen
+        for b in toggles
+            active = nothing
 
-    for b in toggles
-        has_toggled_legend = false
-
-        on(b.clicks) do e
-            # Scan all of the active toggles and hide series that are inactive.
-            # We show all series if all toggles are set to inactive.
-            if all(x -> x.clicks.val % 2 == 0, toggles)
-                has_toggled_legend = false
-
-                for (idx, t) in enumerate(toggles)
-                    series_visible[idx][] = true
-                    t.buttoncolor[] = RGBAf(t.buttoncolor.val.r, t.buttoncolor.val.g, t.buttoncolor.val.b, 1.0)
+            button_click_fn = on(b.clicks) do sidx
+                # Scan all of the active toggles and hide series that are inactive.
+                # We show all series if all toggles are set to inactive.
+                sidx = nothing
+                if isnothing(active)
+                    sidx = series_indexes[block_series[b]]
+                else
+                    sidx = series_indexes[active]
                 end
 
-                reset_limits!(ax)
+                button_clicked[sidx][] = !button_clicked[sidx][]
+                if all(x -> !x.val, button_clicked)
+                    for idx in eachindex(button_clicked)
+                        series_visible[idx][] = true
+                        if idx >= start_idx.val && idx <= end_idx.val
+                            t = toggles[idx - start_idx.val + 1]
+                            t.buttoncolor[] = RGBAf(t.buttoncolor.val.r, t.buttoncolor.val.g, t.buttoncolor.val.b, 1.0)
+                        end
+                    end
+
+                    reset_limits!(ax)
+                    return Consume(true)
+                end
+
+                # Keep track if we've made any changes, so that we can reset the
+                # limits of the graph if there are new graphs
+                has_update = false
+
+                for idx in eachindex(series)
+                    # The number of clicks will be odd if the toggle is active
+                    t = nothing
+                    is_active = button_clicked[idx].val
+
+                    previous_active = series_visible[idx].val
+                    series_visible[idx][] = is_active
+
+                    has_update = has_update || previous_active != is_active
+
+                    if idx >= start_idx.val && idx <= end_idx.val
+                        t = toggles[idx - start_idx.val + 1]
+                        t.buttoncolor[] = RGBAf(
+                            t.buttoncolor.val.r,
+                            t.buttoncolor.val.g,
+                            t.buttoncolor.val.b,
+                            is_active ? 1.0 : 0.25)
+                    end
+                end
+
+                if has_update
+                    reset_limits!(ax)
+                end
+
                 return Consume(true)
             end
 
-            # Keep track if we've made any changes, so that we can reset the
-            # limits of the graph if there are new graphs
-            has_update = false
+            requires_reset = false
 
-            for (idx, t) in enumerate(toggles)
-                # The number of clicks will be odd if the toggle is active
-                is_active = t.clicks[] % 2 == 1
-                has_toggled_legend = has_toggled_legend || is_active
+            on(events(fig).mouseposition) do m
+                p, _ = pick(fig)
+                block_mouseover = try mouseover(b.blockscene, b.blockscene.children[begin].plots[begin]); catch _; false; end;
 
-                previous_active = series_visible[idx].val
-                series_visible[idx][] = is_active
-
-                has_update = has_update || previous_active != is_active
-
-                t.buttoncolor[] = RGBAf(
-                    t.buttoncolor.val.r,
-                    t.buttoncolor.val.g,
-                    t.buttoncolor.val.b,
-                    is_active ? 1.0 : 0.25)
-            end
-
-            if has_update
-                reset_limits!(ax)
-            end
-
-            return Consume(true)
-        end
-
-        active = nothing
-        requires_reset = false
-
-        on(events(fig).mouseposition) do m
-            p, _ = pick(fig)
-            block_mouseover = try mouseover(b.blockscene, b.blockscene.children[begin].plots[begin]); catch _; false; end;
-
-            if block_mouseover
-                # Emulate a picked plot, the rest of the code should handle it gracefully
-                p = block_series[b]
-                requires_reset = false
-            end
-
-            if active != p && !isnothing(active)
-                for s in series
-                    s.alpha[] = 1.0
+                if block_mouseover
+                    # Emulate a picked plot, the rest of the code should handle it gracefully
+                    p = block_series[b]
+                    requires_reset = false
                 end
-                
-                active.linewidth[] = 1.5
-                active.overdraw[] = false
-                active = nothing
-            end
 
-            if isnothing(p)
-                GLMakie.GLFW.SetCursor(glscreen, NORMAL_CURSOR)
-                if requires_reset
-                    all_off = all(x -> x.clicks.val % 2 == 0, toggles)
-                    for t in toggles
-                        t.buttoncolor[] = RGBAf(
-                            t.buttoncolor.val.r, 
-                            t.buttoncolor.val.g, 
-                            t.buttoncolor.val.b, 
-                            all_off || t.clicks.val % 2 == 1 ? 1.0 : 0.25
-                        )
-                    end
+                if active != p && !isnothing(active)
                     for s in series
                         s.alpha[] = 1.0
                     end
+
+                    active.linewidth[] = 1.5
+                    active.overdraw[] = false
+                    active = nothing
                 end
 
-                requires_reset = false
+                if isnothing(p)
+                    if !isnothing(glscreen)
+                        GLMakie.GLFW.SetCursor(glscreen, NORMAL_CURSOR)
+                    end
+                    if requires_reset
+                        all_off = all(x -> !x.val, button_clicked)
+                        for (idx, t) in zip(start_idx.val:end_idx.val, toggles)
+                            t.buttoncolor[] = RGBAf(
+                                t.buttoncolor.val.r, 
+                                t.buttoncolor.val.g, 
+                                t.buttoncolor.val.b, 
+                                all_off || button_clicked[idx].val ? 1.0 : 0.25
+                            )
+                        end
+                        for s in series
+                            s.alpha[] = 1.0
+                        end
+                    end
+
+                    requires_reset = false
+                    return Consume(false)
+                end
+
+                if p in series
+                    requires_reset = true
+                    active = p
+
+                    p.linewidth[] = 5.0
+                    p.overdraw[] = true
+
+                    if isnothing(glscreen)
+                        glscreen = GLMakie.GLFW.GetCurrentContext()
+                    end
+
+                    GLMakie.GLFW.SetCursor(glscreen, HAND_CURSOR)
+                    # Darken the rest of the legends to show which value we have selected
+                    seriesidx = series_indexes[p]
+
+                    for (idx, t) in zip(start_idx.val:end_idx.val, toggles)
+                        t.buttoncolor[] = RGBAf(
+                            t.buttoncolor.val.r,
+                            t.buttoncolor.val.g,
+                            t.buttoncolor.val.b,
+                            idx == seriesidx || button_clicked[idx].val ? 1.0 : 0.25
+                        )
+                    end
+
+                    for s in series
+                        if s != p
+                            s.alpha[] = 0.5
+                        end
+                    end
+                end
+
                 return Consume(false)
             end
 
-            if p in series
-                requires_reset = true
-
-                active = p
-
-                p.linewidth[] = 5.0
-                p.overdraw[] = true
-
-                Makie.enable!(inspector)
-
-                GLMakie.GLFW.SetCursor(glscreen, HAND_CURSOR)
-                # Darken the rest of the legends to show which value we have selected
-                seriesidx = series_indexes[p]
-
-                for (idx, t) in enumerate(toggles)
-                    t.buttoncolor[] = RGBAf(
-                        t.buttoncolor.val.r,
-                        t.buttoncolor.val.g,
-                        t.buttoncolor.val.b,
-                        idx == seriesidx || t.clicks[] % 2 == 1 ? 1.0 : 0.25
-                    )
+            on(events(fig).mousebutton) do mc
+                # Save the variable to avoid potentially losing the reference
+                current_active = active
+                if isnothing(current_active)
+                    return
                 end
 
-                for s in series
-                    if s != p
-                        s.alpha[] = 0.5
-                    end
+                if mc.button != Mouse.left || mc.action != Mouse.release
+                    return
                 end
-            end
 
-            return Consume(false)
-        end
-
-        on(events(fig).mousebutton) do mc
-            # Save the variable to avoid potentially losing the reference
-            current_active = active
-            if !isnothing(current_active)
-                if mc.button == Mouse.left && mc.action == Mouse.release
-                    # Toggle the series visibility by triggering the legend event handler
-                    update_block = toggles[series_indexes[current_active]]
-                    update_block.clicks[] += 1
-
-                    return Consume(true)
+                # Toggle the series visibility by triggering the legend event handler
+                active_index = series_indexes[current_active]
+                if active_index < start_idx.val || active_index > end_idx.val
+                    # Find the page that this plot is on and advance the page observable
+                    page[] = convert(Int, ceil(active_index / results_per_page))
+                    return Consume(false)
                 end
+
+                active_index = active_index - start_idx.val + 1
+                button_click_fn.f(0)
+
+                return Consume(true)
             end
         end
     end
 
     return vcat(
-        toggles, 
-        formatted_labels,
-        inspector
+        toggles_gc, 
+        formatted_labels_gc
     )
 end
 
@@ -424,7 +513,8 @@ function init_window(
         focused=false,
         fontsize=16,
         font=FONT_COURIER,
-        width=250,
+        width=250 
+        ,
         tellwidth=false,
         halign=:left
     )

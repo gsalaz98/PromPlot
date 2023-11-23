@@ -41,7 +41,7 @@ function TUI.init!(m::Model, t::TUI.TerminalBackend)
     # Recreation of the event loop of the TUI library
     # so that we can update the model in realtime
     while !m.quit
-        evt = TUI.try_get_event(t)#, wait=m.realtime_update_period)
+        evt = TUI.try_get_event(t, wait=Dates.Second(m.realtime_update_period).value)
         isnothing(evt) ?
             update!(m) :
             TUI.update!(m, evt)
@@ -65,9 +65,7 @@ function get_title_padding(fig)
 end
 
 function TUI.render(p::PlotOut, area::TUI.Rect, buf::TUI.Buffer)
-    padding = 0
-
-
+    padding = get_title_padding(p.fig)
     final_fig = [!startswith(i, ' ') ? repeat(' ', padding) * i : i for i in split(p.fig, "\n")]
 
     for (idx, row) in enumerate(final_fig)
@@ -109,10 +107,6 @@ function TUI.view(m::Model)
     dfgroup = groupby(m.df, allbut(m.df, [:ts, :value]))
 
     for (idx, dfg) in dfgroup |> enumerate
-        if all(iszero, dfg[:, :value])
-            continue
-        end
-
         colnames = allbut(dfg, [:ts, :value])
         colvalues = values(dfg[1, allbut(dfg, [:ts, :value])])
 
@@ -183,26 +177,6 @@ function TUI.update!(m::Model, event::TUI.KeyEvent)
     update!(m)
 end
 
-function parse_period(period::String)
-    if endswith(period, "s")
-        return Dates.Second(parse(Int, period[1:end-1]))
-    elseif endswith(period, "m")
-        return Dates.Minute(parse(Int, period[1:end-1]))
-    elseif endswith(period, "h")
-        return Dates.Hour(parse(Int, period[1:end-1]))
-    elseif endswith(period, "d")
-        return Dates.Day(parse(Int, period[1:end-1]))
-    elseif endswith(period, "w")
-        return Dates.Week(parse(Int, period[1:end-1]))
-    elseif endswith(period, "M")
-        return Dates.Month(parse(Int, period[1:end-1]))
-    elseif endswith(period, "y")
-        return Dates.Year(parse(Int, period[1:end-1]))
-    else
-        error("Invalid period: $period")
-    end
-end
-
 function init_terminal(
     p::PrometheusQueryClient;
     query::Union{Nothing, String}=nothing,
@@ -222,17 +196,8 @@ function init_terminal(
     realtime_range_period = parse_period(realtime_range)
     realtime_update_period = parse_period(realtime_update)
 
-    if isnothing(startdate)
-        startdate = Dates.format(now(UTC) - realtime_range_period, RFC3339_FORMAT)
-    elseif isa(startdate, DateTime)
-        startdate = Dates.format(startdate, RFC3339_FORMAT)
-    end
-
-    if isnothing(enddate)
-        enddate = Dates.format(now(UTC), RFC3339_FORMAT)
-    elseif isa(enddate, DateTime)
-        enddate = Dates.format(enddate, RFC3339_FORMAT)
-    end
+    startdate = get_startdate(startdate)
+    enddate = get_enddate(enddate)
 
     if isnothing(update_resolution)
         update_resolution = "1m"
