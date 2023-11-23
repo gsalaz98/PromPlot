@@ -84,7 +84,7 @@ function format_label_table(labels::Vector{String})::Vector{String}
     return formatted_labels
 end
 
-function render_data(fig, layout, ax, df, status_label; query=nothing, startdate=nothing, enddate=nothing, orientation=:col, is3d=false, series_limit=100)
+function draw_ax!(fig, layout, ax, df, query, startdate, enddate, is3d; title=nothing)
     try 
         # 3D plots don't have an empty! method defined, so let's clear the 
         # whole axis and start anew
@@ -100,6 +100,7 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
     end
 
     dfgroups = groupby(df, allbut(df, [:ts, :value]))
+
     series = []
     series_visible = Observable{Bool}[]
     labels = String[]
@@ -131,7 +132,10 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
         end
     end
 
-    ax.title[] = join(("Query: " * query, "Start: " * startdate * ", End: " * enddate), "\n")
+    ax.title[] = isnothing(title) ? 
+        join(("Query: " * query, "Start: " * startdate * ", End: " * enddate), "\n") :
+        title
+
     ax.titlesize[] = 24
     ax.titlefont[] = FONT_COURIER
 
@@ -146,6 +150,21 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
         ax.ylabel[] = "Series Index"
         ax.zlabel[] = "Value"
     end
+
+    return series, series_visible, labels
+end
+
+function render_data!(fig, layout, ax, df, status_label; query=nothing, startdate=nothing, enddate=nothing, orientation=:col, is3d=false, series_limit=100)
+    series, series_visible, labels = draw_ax!(
+        fig,
+        layout,
+        ax,
+        df,
+        query,
+        startdate,
+        enddate,
+        is3d
+    )
 
     lrow = orientation == :col ? 1 : 2
     lcol = orientation == :col ? 2 : 1
@@ -176,7 +195,50 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
         halign=:left
     )
 
-    glscreen = nothing
+    is3d_button = Button(
+        layout[lrow, lcol];
+        label="3D Plot",
+        buttoncolor=:blue,
+        labelcolor=:white,
+        halign=:left
+    )
+
+    page_changed_fn = nothing
+    on(is3d_button.clicks) do clicks
+        # Save the title so that we can restore it after we wipe out the axis
+        title = ax.title[]
+
+        # Wipe out the previous Axis(3)
+        delete!(ax)
+
+        is3d = clicks % 2 != 0
+        ax = is3d ?
+            Axis3(layout[1, 1]) :
+            Axis(layout[1, 1])
+
+        # Counter-intuitive, but if we toggled 3D, we want to have the option to revert
+        if is3d
+            is3d_button.label[] = "2D Plot"
+        else
+            is3d_button.label[] = "3D Plot"
+        end
+
+        series, series_visible, labels = draw_ax!(
+            fig,
+            layout,
+            ax,
+            df,
+            query,
+            startdate,
+            enddate,
+            is3d;
+            title=title
+        )
+
+        if !isnothing(page_changed_fn)
+            page_changed_fn.f(0)
+        end
+    end
 
     on(next_button.clicks) do next_click
         page[] = min(page.val + 1, convert(Int, ceil(length(labels) / results_per_page)))
@@ -190,8 +252,9 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
 
     toggles_gc = nothing
     formatted_labels_gc = nothing
+    glscreen = nothing
 
-    on(page; update=true) do p
+    page_changed_fn = on(page; update=true) do _
         if !isnothing(toggles_gc)
             for t in toggles_gc
                 delete!(t)
@@ -231,12 +294,9 @@ function render_data(fig, layout, ax, df, status_label; query=nothing, startdate
             block_series[b] = s
         end
 
-        layout[lrow, lcol] = grid!(
-            vcat(
-                hcat(toggles, formatted_labels),
-                hcat(prev_button, next_button)
-            )
-        )
+        layout[lrow, lcol] = grid!(hcat(toggles, formatted_labels))
+        layout[lrow + 1, lcol] = grid!(hcat(prev_button, next_button, is3d_button))
+
 
         for b in toggles
             active = nothing
@@ -586,7 +646,7 @@ function init_window(
             startdate = startdate_tb.stored_string.val
             enddate = enddate_tb.stored_string.val
 
-            gc = render_data(
+            gc = render_data!(
                 fig, 
                 plot_layout, 
                 ax, 
@@ -631,7 +691,7 @@ function init_window(
                     try delete!(g); catch; end;
                 end
             end
-            gc = render_data(
+            gc = render_data!(
                 fig,
                 plot_layout,
                 ax,

@@ -65,18 +65,38 @@ function dashboard(
     end
 
 
-    ax_layout = GridLayout(convert(Int, ceil(length(panels) / 2.0)), 2)
+    ax_layout = GridLayout(3, 2)
+
     colsize!(ax_layout, 1, Relative(0.5))
     colsize!(ax_layout, 2, Relative(0.5))
 
     fig[1, 1] = ax_layout
+    
+    prev_charts_button = Button(
+        ax_layout[3, 1];
+        label="Previous Page",
+        buttoncolor=:blue,
+        labelcolor=:white,
+        halign=:left
+    )
+
+    next_charts_button = Button(
+        ax_layout[3, 2];
+        label="Next Page",
+        buttoncolor=:blue,
+        labelcolor=:white,
+        halign=:right
+    )
+    
+    ax_layout[3, 1] = prev_charts_button
+    ax_layout[3, 2] = next_charts_button
 
     for (idx, panel) in panels |> enumerate
         grafana_queries = panel["targets"]
         title = panel["title"]
 
-        row = convert(Int, ceil(idx / 2))
-        col = ((idx - 1) % 2) + 1
+        row = min(2, convert(Int, ceil(idx / 2)))
+        col = min(2, ((idx - 1) % 2) + 1)
 
         plot_layout = GridLayout(2, 1)
         ax_layout[row, col] = plot_layout
@@ -98,7 +118,7 @@ function dashboard(
                 return
             end
 
-            render_data(
+            render_data!(
                 fig,
                 plot_layout,
                 ax,
@@ -119,5 +139,5 @@ function dashboard(
 end
 
 p = PrometheusQueryClient(url="http://192.168.39.20:31993")
-dashboard(p, "grafana.json")
+dashboard(p, "dashboards/grafana.json")
 end
