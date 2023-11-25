@@ -1,4 +1,3 @@
-begin
 using Dates
 using GLMakie
 using JSON
@@ -10,10 +9,7 @@ include("plot_gui.jl")
 function dashboard(
     p::PrometheusQueryClient,
     dashboard_file::String;
-    is3d::Bool=false,
-    startdate::Union{Nothing, Union{DateTime, String}}=nothing,
-    enddate::Union{Nothing, Union{DateTime, String}}=nothing,
-    update_resolution::Union{Nothing, String}=nothing,
+    step::Union{Nothing, String}=nothing,
 )
     initial_resolution = (3840, 2160)
     GLMakie.activate!(; framerate=60.0)
@@ -91,6 +87,8 @@ function dashboard(
     ax_layout[3, 1] = prev_charts_button
     ax_layout[3, 2] = next_charts_button
 
+    ax_width = Relative(0.85)
+
     for (idx, panel) in panels |> enumerate
         grafana_queries = panel["targets"]
         title = panel["title"]
@@ -101,7 +99,7 @@ function dashboard(
         plot_layout = GridLayout(2, 1)
         ax_layout[row, col] = plot_layout
 
-        ax = Axis(plot_layout[1, 1]; width=Relative(0.85))
+        ax = Axis(plot_layout[1, 1]; width=ax_width)
 
         for grafana_query in grafana_queries
             query = grafana_query["expr"]
@@ -110,7 +108,7 @@ function dashboard(
                 query;
                 startdate=startdate,
                 enddate=enddate,
-                step=update_resolution
+                step=step
             )
 
             if isnothing(df)
@@ -119,25 +117,24 @@ function dashboard(
             end
 
             render_data!(
+                p,
                 fig,
                 plot_layout,
                 ax,
-                df,
-                "",
+                df;
                 query=query,
+                step=step,
                 orientation=:row,
                 startdate=startdate,
-                enddate=enddate
+                enddate=enddate,
+                realtime=true,
+                realtime_update_period=Dates.Second(5),
+                realtime_range_period=grafana_dashboard_start_period,
+                title=title,
+                ax_width=ax_width
             )
         end
-        
-        ax.title[] = title
     end
 
-    display(fig)
-    return
-end
-
-p = PrometheusQueryClient(url="http://192.168.39.20:31993")
-dashboard(p, "dashboards/grafana.json")
+    return fig
 end

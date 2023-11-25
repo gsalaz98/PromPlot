@@ -23,7 +23,8 @@ function promql(
     startdate::Union{Nothing, Union{String, DateTime}}=nothing,
     enddate::Union{Nothing, Union{String, DateTime}}=nothing,
     step::Union{Nothing, String}=nothing,
-    timeout::Union{Nothing, String}=nothing)::Union{Nothing, DataFrame}
+    timeout::Union{Nothing, String}=nothing
+)::Union{Nothing, DataFrame}
 
     # Remove potential whitespace and append a trailing slash
     url = rstrip(rstrip(client.url), '/') * client.api * "query_range"

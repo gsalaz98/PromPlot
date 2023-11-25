@@ -27,7 +27,6 @@
         "type": "prometheus",
         "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -88,7 +87,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 2,
+      "id": 3,
       "options": {
         "legend": {
           "calcs": [],
@@ -108,14 +107,14 @@
             "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
           },
           "editorMode": "code",
-          "expr": "rate((sum by (instance, pod) (kubelet_container_log_filesystem_used_bytes) != 0)[1h:1m]) != 0",
+          "expr": "rate(sum by (instance, operation, type) (apiserver_admission_controller_admission_duration_seconds_sum)[1h:])",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Log Rate > 0",
+      "title": "Admission Duration Rate",
       "type": "timeseries"
     },
     {
@@ -205,7 +204,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "irate(sum by (instance, device) (node_network_transmit_bytes_total)[1h:5m]) != 0",
+          "expr": "idelta(etcd_requests_total[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -223,6 +222,7 @@
         "type": "prometheus",
         "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -280,10 +280,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 7,
+        "x": 0,
         "y": 8
       },
-      "id": 3,
+      "id": 2,
       "options": {
         "legend": {
           "calcs": [],
@@ -303,31 +303,126 @@
             "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
           },
           "editorMode": "code",
-          "expr": "rate(sum by (instance, operation, type) (apiserver_admission_controller_admission_duration_seconds_sum)[1h:])",
+          "expr": "rate((sum by (instance, pod) (kubelet_container_log_filesystem_used_bytes) != 0)[1h:1m]) != 0",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Admission Duration Rate",
+      "title": "Log Rate > 0",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
+          },
+          "editorMode": "code",
+          "expr": "ceph_osd_commit_latency_ms",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Panel Title",
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": "5s",
   "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-10m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "New dashboard",
   "uid": "fc9ee563-6d9f-44ce-978f-657d2a657db9",
-  "version": 4,
+  "version": 6,
   "weekStart": ""
 }

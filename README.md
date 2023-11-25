@@ -1,13 +1,20 @@
 # PromPlot
-Plot Prometheus graphs in the command line and GUI, with realtime support.
+Plot Prometheus metrics in CLI/GUI
+
+* Realtime 2D/3D plotting, in CLI and GUI
+* Load Grafana dashboards locally from dashboard JSON
+* Interactive GUI allows for easy filtering of data for better visualization
 
 ## Notice
 I am currently looking for work. If you would like to have me on your team, please reach out to `gerardo@salazar.pub`
 
 # Demo
-![Example PromPlot 2D CLI Plot Realtime](./docs/promplot_example_cli.gif)
-![Example PromPlot 2D Graphing Display](./docs/promplot_example_2d.png)
-![Example PromPlot 3D Graphing Display](./docs/promplot_example_3d.png)
+
+## Grafana dashboard loaded via JSON model
+![Example Grafana Dashboard Replica 2D/3D Plot in Realtime](./docs/grafana_dashboard_replica.png)
+
+## Realtime CLI Plotting
+![Example PromPlot 2D CLI Plot in Realtime](./docs/promplot_example_cli.gif)
 
 # Getting started
 Making this application installable via `krew` is in the roadmap and will hopefully be the
@@ -20,6 +27,9 @@ preferred method of installation in the future.
 4. `exit()`
 5. `julia --project=. PromPlot.jl --promql "idelta((sum by (method, path) (kubelet_http_requests_duration_seconds_sum))[24h:])" --url "http://prometheus.my-cluster.k8s.internal:9090"`
 6. Replace the `--url` argument with your Prometheus server
+
+To run a Grafana dashboard
+1. `julia --project=. PromPlot.jl --dashboard="./dashboards/example.json" --url "http://prometheus.my-cluster.k8s.internal:9090"`
 
 ### Available options:
 ```
