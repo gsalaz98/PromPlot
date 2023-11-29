@@ -10,6 +10,9 @@ function dashboard(
     p::PrometheusQueryClient,
     dashboard_file::String;
     step::Union{Nothing, String}=nothing,
+    realtime::Bool=true,
+    realtime_update::String="5s",
+    realtime_range::String="1h"
 )
     initial_resolution = (3840, 2160)
     GLMakie.activate!(; framerate=60.0)
@@ -33,22 +36,27 @@ function dashboard(
     
     nowutc = now(UTC)
 
-    startdate = nothing
-    enddate = nothing
+    startdate = try DateTime(grafana_time_from, RFC3339_FORMAT) catch; nothing; end;
+    enddate = try DateTime(grafana_time_to, RFC3339_FORMAT); catch; nothing; end;
 
-    if occursin("now", grafana_time_from)
+    realtime_update_period = parse_period(realtime_update)
+    realtime_range_period = parse_period(realtime_range)
+
+    if isnothing(startdate) && occursin("now", grafana_time_from)
         now_split = split(grafana_time_from, "-")
         # Assume that `now` is the first element. The second
         # element is the period to subtract from `now`
         if length(now_split) == 1
-            error("We don't support this yet, only `now` start times are supported")
+            error("We don't support this yet, only `now` with subtraction start times are supported")
         end
 
         grafana_dashboard_start_period = parse_period(now_split[2])
         startdate = string(nowutc - grafana_dashboard_start_period) * "Z"
+    elseif !isnothing(startdate)
+        startdate = string(startdate) * "Z"
     end
 
-    if occursin("now", grafana_time_to)
+    if isnothing(enddate) && occursin("now", grafana_time_to)
         now_split = split(grafana_time_to, "-")
         # Assume that `now` is the first element. The second
         # element is the period to subtract from `now`
@@ -58,8 +66,9 @@ function dashboard(
             grafana_dashboard_end_period = parse_period(now_split[2])
             enddate = string(nowutc - grafana_dashboard_end_period) * "Z"
         end
+    elseif !isnothing(enddate)
+        enddate = string(enddate) * "Z"
     end
-
 
     ax_layout = GridLayout(3, 2)
 
@@ -127,9 +136,9 @@ function dashboard(
                 orientation=:row,
                 startdate=startdate,
                 enddate=enddate,
-                realtime=true,
-                realtime_update_period=Dates.Second(5),
-                realtime_range_period=grafana_dashboard_start_period,
+                realtime=realtime,
+                realtime_update_period=realtime_update_period,
+                realtime_range_period=realtime_range_period,
                 title=title,
                 ax_width=ax_width
             )

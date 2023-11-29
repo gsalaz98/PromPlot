@@ -193,6 +193,19 @@ function update_ax!(ax, df, xs, ys, zs)
         zs[joined_label][] = fill(idx, size(dfg)[1])
     end
 
+    # Remove any series that are no longer in the dataframe
+    for label in keys(xs) |> collect
+        if !(label in labels_seen)
+            empty!(xs[label][])
+            empty!(ys[label][])
+            empty!(zs[label][])
+
+            delete!(xs, label)
+            delete!(ys, label)
+            delete!(zs, label)
+        end
+    end
+
     reset_limits!(ax)
 end
 

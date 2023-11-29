@@ -409,20 +409,20 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": false,
   "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-10m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "New dashboard",
   "uid": "fc9ee563-6d9f-44ce-978f-657d2a657db9",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }

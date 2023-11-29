@@ -111,7 +111,14 @@ function main()
 
     fig = nothing
     if !isnothing(args[:dashboard])
-        fig = dashboard(p, args[:dashboard]; step=args[:step])
+        fig = dashboard(
+            p, 
+            args[:dashboard]; 
+            step=args[:step],
+            realtime=args[:realtime],
+            realtime_update=args[:realtime_update],
+            realtime_range=args[:realtime_range]
+        )
     end
 
     if isnothing(fig) && is_tui_plot && !is_gui_plot
