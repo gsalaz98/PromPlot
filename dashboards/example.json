@@ -204,7 +204,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "idelta(etcd_requests_total[1m])",
+          "expr": "irate(etcd_requests_total[1h:])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -303,7 +303,7 @@
             "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
           },
           "editorMode": "code",
-          "expr": "rate((sum by (instance, pod) (kubelet_container_log_filesystem_used_bytes) != 0)[1h:1m]) != 0",
+          "expr": "rate((sum by (instance, pod) (kubelet_container_log_filesystem_used_bytes) != 0)[1h:]) != 0",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -398,7 +398,7 @@
             "uid": "d73437b6-2029-4ebe-a0cf-31fa714a11a8"
           },
           "editorMode": "code",
-          "expr": "ceph_osd_commit_latency_ms",
+          "expr": "avg_over_time(ceph_osd_commit_latency_ms[1h:])",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -409,20 +409,20 @@
       "type": "timeseries"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "New dashboard",
   "uid": "fc9ee563-6d9f-44ce-978f-657d2a657db9",
-  "version": 7,
+  "version": 8,
   "weekStart": ""
 }

@@ -103,7 +103,7 @@ function draw_ax!(fig, layout, ax, df, query, startdate, enddate, is3d; title=no
                 Axis(layout[1, 1]; width=ax_width)
         end
     catch;
-    end
+    end;
 
     dfgroups = groupby(df, allbut(df, [:ts, :value]))
 
@@ -173,39 +173,28 @@ function draw_ax!(fig, layout, ax, df, query, startdate, enddate, is3d; title=no
 end
 
 function update_ax!(ax, df, xs, ys, zs)
+    dateformat = "u dd HH:MM:SS"
     df_start = minimum(df[:, :ts])
 
-    dateformat = "u dd HH:MM:SS"
     if unix2datetime(maximum(df[:, :ts])) - unix2datetime(df_start) < Dates.Day(1)
         dateformat = "HH:MM:SS"
     end
 
     ax.xtickformat = x -> Dates.format.(unix2datetime.(x .+ df_start), dateformat)
-    labels_seen = []
     dfgroup = groupby(df, allbut(df, [:ts, :value]))
 
     for (idx, dfg) in dfgroup |> enumerate
-        joined_label = create_label(dfg)
-        push!(labels_seen, joined_label)
+        label = create_label(dfg)
 
-        xs[joined_label][] = dfg[:, :ts] .- df_start
-        ys[joined_label][] = dfg[:, :value]
-        zs[joined_label][] = fill(idx, size(dfg)[1])
+        xs[label].val = dfg[:, :ts] .- df_start
+        ys[label].val = dfg[:, :value]
+        zs[label].val = fill(idx, size(dfg)[1])
+
+        # We notify after the fact because otherwise we get a broadcast error
+        # because Makie.jl attempts to plot the data before we are done updating
+        notify.((xs[label], ys[label], zs[label]))
     end
-
-    # Remove any series that are no longer in the dataframe
-    for label in keys(xs) |> collect
-        if !(label in labels_seen)
-            empty!(xs[label][])
-            empty!(ys[label][])
-            empty!(zs[label][])
-
-            delete!(xs, label)
-            delete!(ys, label)
-            delete!(zs, label)
-        end
-    end
-
+    
     reset_limits!(ax)
 end
 
@@ -247,42 +236,47 @@ function render_data!(
         return Consume(false)
     end
 
-    Threads.@spawn :interactive begin
-        if !realtime
-            return
-        end
+    if realtime
+        Threads.@spawn :interactive begin
+            while !window_closed
+                sleep(realtime_update_period)
+                try
+                    df = promql(
+                        client,
+                        query,
+                        startdate=now(UTC) - realtime_range_period,
+                        enddate=now(UTC),
+                        step=step,
+                        timeout=nothing
+                    )
+                catch err
+                    println(err)
+                    return
+                end
 
-        while !window_closed
-            sleep(realtime_update_period)
-            try
-                df = promql(
-                    client,
-                    query,
-                    startdate=now(UTC) - realtime_range_period,
-                    enddate=now(UTC),
-                    step=step,
-                    timeout=nothing
-                )
-            catch err
-                println(err)
-                return
-            end
+                try
+                    if !validate_df(df)
+                        println("Query produced empty DataFrame: $query")
+                        continue
+                    end
 
-            if validate_df(df)
-                title = isnothing(title) ? 
-                    join(("Query: " * query, "Start: " * startdate * ", End: " * enddate), "\n") :
-                    title
+                    title = isnothing(title) ? 
+                        join(("Query: " * query, "Start: " * startdate * ", End: " * enddate), "\n") :
+                        title
 
-                update_ax!(
-                    ax,
-                    df,
-                    xs,
-                    ys,
-                    zs
-                )
+                    update_ax!(
+                        ax,
+                        df,
+                        xs,
+                        ys,
+                        zs
+                    )
 
-                if !isnothing(page_changed_fn)
-                    page_changed_fn.f(1)
+                    if !isnothing(page_changed_fn)
+                        page_changed_fn.f(1)
+                    end
+                catch e
+                    println("Error updating plot: $e")
                 end
             end
         end
@@ -386,7 +380,9 @@ function render_data!(
         Button(
             layout[lrow, lcol];
             label="",
-            buttoncolor=series[idx].color
+            buttoncolor=series[idx].color,
+            buttoncolor_active=series[idx].color,
+            buttoncolor_hover=series[idx].color,
         ) for idx in collect(eachindex(series))[begin:toggles_max]
     ]
 
@@ -414,18 +410,23 @@ function render_data!(
             toggle = on_screen_toggles[element_idx]
 
             toggle.buttoncolor[] = series[idx].color.val
+            toggle.buttoncolor_active[] = series[idx].color.val
+            toggle.buttoncolor_hover[] = series[idx].color.val
+
             label.text[] = formatted_labels[idx]
 
             block_series[toggle] = series[idx]
         end
 
         if end_idx.val - start_idx.val != results_per_page - 1
-            for idx in (end_idx.val - start_idx.val + 1):results_per_page
+            for idx in ((end_idx.val - start_idx.val) + 2):results_per_page
                 label = on_screen_labels[idx]
                 toggle = on_screen_toggles[idx]
 
                 label.text[] = ""
                 toggle.buttoncolor[] = BLACK
+                toggle.buttoncolor_active[] = BLACK
+                toggle.buttoncolor_hover[] = BLACK
             end
         end
     end
@@ -435,6 +436,11 @@ function render_data!(
 
     for b in on_screen_toggles
         button_click_fn = on(b.clicks) do _
+            if b.buttoncolor.val == BLACK
+                # The button is disabled and not visible, do nothing with the click
+                return Consume(true)
+            end
+
             # Scan all of the active toggles and hide series that are inactive.
             # We show all series if all toggles are set to inactive.
             sidx = nothing
@@ -576,6 +582,10 @@ function render_data!(
         end
 
         if p in series
+            if !isnothing(b) && b.buttoncolor.val == BLACK
+                return Consume(false)
+            end
+
             requires_reset = true
             active = p
 
