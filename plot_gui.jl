@@ -1,6 +1,5 @@
 using Dates
 using GLMakie
-using UnicodePlots
 
 include("prometheus.jl")
 include("utils.jl")

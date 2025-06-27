@@ -5,9 +5,6 @@ Plot Prometheus metrics in CLI/GUI
 * Load Grafana dashboards locally from dashboard JSON
 * Interactive GUI allows for easy filtering of data for better visualization
 
-## Notice
-I am currently looking for work. If you would like to have me on your team, please reach out to `gerardo@salazar.pub`
-
 # Demo
 
 ## Grafana dashboard loaded via JSON model
